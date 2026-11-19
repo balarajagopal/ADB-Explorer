@@ -1,0 +1,47 @@
+name: Test build
+
+# Builds a self-contained x64 Release and publishes it as a pre-release.
+# Runs when a tag starting with "test-" is pushed, or by hand from the Actions tab.
+on:
+  push:
+    tags: ['test-*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        run: >
+          dotnet publish "ADB Explorer/ADB Explorer.csproj"
+          -c Release -p:Platform=x64 -r win-x64 --self-contained true
+          -o publish
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath ADB-Explorer-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ADB-Explorer-x64
+          path: ADB-Explorer-x64.zip
+
+      - name: Create pre-release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: >
+          gh release create "${{ github.ref_name }}" ADB-Explorer-x64.zip
+          --repo "${{ github.repository }}" --prerelease
+          --title "Test build ${{ github.ref_name }}"
+          --notes "Unofficial test build of branch fix/empty-file-push (empty-file push fix). Unzip and run ADB Explorer.exe."
